@@ -16,6 +16,7 @@
 - [docs/05-第二階段-資料庫與API.md](docs/05-第二階段-資料庫與API.md) — D1 schema、API、登入對應、授權與樂觀鎖
 - [docs/06-第三階段-檔案與LINE推播.md](docs/06-第三階段-檔案與LINE推播.md) — R2 上傳與權限、限時連結、LINE 官方帳號設定與綁定、截止提醒
 - [docs/07-第四階段-Excel匯出.md](docs/07-第四階段-Excel匯出.md) — ExcelJS 8 個工作表、data bar、嵌入圖表、匯出選項
+- [docs/08-給ChatGPT的部署說明.md](docs/08-給ChatGPT的部署說明.md) — 可直接貼給 ChatGPT Sites 的部署說明、打包指令、發佈後管理員待辦
 
 ## 技術架構（與 ChatGPT Sites 相容）
 
