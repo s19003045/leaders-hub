@@ -3,9 +3,9 @@
 教會「職場領袖聚集」的教學管理平台：課程、線上表單、個人／分組作業、教材中心、文章分享、統計與匯出。
 繁體中文、mobile-first，目標使用者 42～65 歲。
 
-**目前狀態：第三階段完成。** 所有頁面可操作，資料存在 Cloudflare D1，讀寫經由 Workers API 並在伺服器端做角色授權；
-登入以 ChatGPT 帳號（Sign in with ChatGPT）對應 `users` 表；附件上傳到 R2 並受權限保護；新內容與截止提醒推播到 LINE。
-第四階段剩 ExcelJS 匯出。
+**目前狀態：第一～四階段完成，進入第五階段（測試與正式部署）。** 所有頁面可操作，資料存在 Cloudflare D1，讀寫經由 Workers API 並在伺服器端做角色授權；
+登入以 ChatGPT 帳號（Sign in with ChatGPT）對應 `users` 表；附件上傳到 R2 並受權限保護；新內容與截止提醒推播到 LINE；
+統計可匯出含 8 個工作表與圖表的 Excel。
 
 相關文件：
 
@@ -15,6 +15,7 @@
 - [docs/04-交給ChatGPT-Sites部署.md](docs/04-交給ChatGPT-Sites部署.md) — 把程式碼交給 ChatGPT 建置與發佈的步驟與注意事項
 - [docs/05-第二階段-資料庫與API.md](docs/05-第二階段-資料庫與API.md) — D1 schema、API、登入對應、授權與樂觀鎖
 - [docs/06-第三階段-檔案與LINE推播.md](docs/06-第三階段-檔案與LINE推播.md) — R2 上傳與權限、限時連結、LINE 官方帳號設定與綁定、截止提醒
+- [docs/07-第四階段-Excel匯出.md](docs/07-第四階段-Excel匯出.md) — ExcelJS 8 個工作表、data bar、嵌入圖表、匯出選項
 
 ## 技術架構（與 ChatGPT Sites 相容）
 
@@ -26,7 +27,8 @@
 | 檔案 | Cloudflare R2（binding `BUCKET`，`lib/server/files.ts`） | 上傳即存 R2；下載經 `/api/files/{key}` 檢查權限，或 15 分鐘限時簽章連結 |
 | 通知 | 站內通知 + LINE Messaging API（`lib/server/line.ts`、`reminders.ts`） | 公告推群組、個人事件推已綁定者；截止前 3 天／1 天惰性排程提醒 |
 | 登入 | Sign in with ChatGPT（`lib/chatgpt-auth.ts` 讀取 `oai-authenticated-user-*` header → `lib/server/auth.ts` 對應 `users`） | 本機開發由 `scripts/vite/sites-vite-plugin.ts` 模擬；`DEMO_LOGIN=1` 另提供示範身分 |
-| 圖表 | Recharts | 統計頁 |
+| 圖表 | Recharts（統計頁）、Canvas PNG（Excel 嵌入） | |
+| Excel | ExcelJS（瀏覽器端動態載入，`lib/export-xlsx.ts`） | 8 個工作表、data bar、嵌入圖表、CSV 備援 |
 
 `scripts/`、`worker/`、`vite.config.ts`、`.openai/hosting.json`、`pnpm-workspace.yaml` 等皆沿用 Sites 匯出專案的結構，請勿改動其位置。
 
@@ -65,7 +67,9 @@ lib/
   seed.ts              示範資料（12 位學員、3 組、7 課、表單、作業、教材、文章）
   store.ts             前端資料層：/api/state 快照 + 呼叫 API 的 actions
   selectors.ts         純函式：待辦、作業狀態、完成率、題目統計（前後端共用）
-  export.ts            8 個工作表的匯出資料整理（目前 CSV）
+  export.ts            8 個工作表的匯出資料整理與篩選
+  export-xlsx.ts       ExcelJS 組檔（樣式、data bar、圖片）
+  charts-png.ts        Canvas 長條圖 → PNG
   format.ts            日期、狀態文字
   chatgpt-auth.ts      讀取 ChatGPT 登入 header
   server/
@@ -129,10 +133,14 @@ pnpm lint
 pnpm build
 ```
 
+```bash
+corepack pnpm check:export
+```
+
 ## 開發階段
 
 1. **第一階段（完成）**：可操作原型、模擬資料、全部頁面可切換。
 2. **第二階段（完成）**：D1 migration、`/api/*` 以 Drizzle 讀寫 D1、ChatGPT 登入對應 `users.email`、伺服器端角色授權與樂觀鎖。
 3. **第三階段（完成）**：R2 檔案上傳與限時連結、LINE 推播與綁定、截止提醒、課程與表單編輯。
-4. **第四階段**：統計儀表板資料改由 API 彙整、ExcelJS 產生含圖表的 `.xlsx`。
+4. **第四階段（完成）**：ExcelJS 產生含 8 個工作表、data bar 與圖表圖片的 `.xlsx`，支援課程／作業／時間／匿名篩選。
 5. **第五階段**：權限、安全、上傳限制、多人操作測試後正式發佈。

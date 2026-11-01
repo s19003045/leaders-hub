@@ -35,7 +35,7 @@ cd /opt/church && zip -r leaders-hub-source.zip leaders-hub -x 'leaders-hub/node
 | 正式環境是 Workers，不是 Node 常駐伺服器 | API 全部在 `app/api/[...path]/route.ts`，無狀態；不使用 Node 專屬模組 |
 | 無原始 TCP，資料庫只能用 D1 | `db/schema.ts` 為 D1（SQLite）設計；JSON 欄位以 text 儲存 |
 | 無背景服務 | 提醒推播採惰性排程或管理員手動觸發（見 03 文件） |
-| 128 MB 記憶體 | Excel 匯出在瀏覽器端產生（ExcelJS），不在 Workers |
+| 128 MB 記憶體 | Excel 匯出在瀏覽器端產生（ExcelJS 動態載入），不在 Workers |
 | 私人附件 | 存 R2；`/api/files/{key}` 逐次檢查權限，或 15 分鐘 HMAC 限時連結（見 06 文件） |
 | 單一請求 100 MB | 教材上限 100 MB、作業附件 50 MB |
 | 外部 OAuth 未驗證 | 第一版使用 Sign in with ChatGPT（見 02 文件） |

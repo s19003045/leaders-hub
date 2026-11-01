@@ -1,18 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Download } from "lucide-react";
-import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { AppShell } from "@/components/app-shell";
 import { StaffOnly } from "@/components/staff-only";
-import { Button } from "@/components/ui/button";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { PageHeader, Pill, SegmentedTabs, Section, StatTile } from "@/components/ui-bits";
 import { useData } from "@/lib/store";
 import { assignmentStats, courseCompletion, formStats, groupCompletion, questionStats, studentCompletion, students } from "@/lib/selectors";
 import { fmtDateTime, pct } from "@/lib/format";
-import { buildExportSheets, downloadCsvBundle } from "@/lib/export";
+import { ExportPanel } from "@/components/export-panel";
 
 const chartConfig = { rate: { label: "完成率 %", color: "var(--chart-1)" } } satisfies ChartConfig;
 
@@ -25,13 +22,6 @@ export default function AdminStatsPage() {
   const gc = groupCompletion(data);
   const cc = courseCompletion(data);
   const late = data.assignmentSubmissions.filter((s) => s.submitStatus === "late").length;
-  const [scope, setScope] = useState({ courseId: "all", anonymous: false });
-
-  const doExport = () => {
-    const sheets = buildExportSheets(data, { courseId: scope.courseId === "all" ? undefined : scope.courseId, anonymous: scope.anonymous });
-    downloadCsvBundle(sheets, `職場領袖_匯出_${new Date().toISOString().slice(0, 10)}`);
-    toast.success(`已匯出 ${sheets.length} 個工作表（第一階段為 CSV，第四階段改為含圖表的 Excel）`);
-  };
 
   return (
     <AppShell title="統計與匯出" wide>
@@ -130,23 +120,7 @@ export default function AdminStatsPage() {
           </div>
         )}
 
-        {tab === "export" && (
-          <div className="rounded-2xl border bg-card p-4">
-            <h3 className="mb-2">Excel 匯出</h3>
-            <p className="mb-4 text-sm text-muted-foreground">匯出包含 8 個工作表：表單原始回答、個人作業繳交紀錄、分組作業繳交紀錄、各學員完成率、各小組完成率、各課程完成率、表單題目統計、統計圖表。匯出遵守你的資料存取權限。</p>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="block"><span className="mb-1 block font-medium">範圍</span>
-                <select className="min-h-12 w-full rounded-lg border border-input bg-background px-3 text-base" value={scope.courseId} onChange={(e) => setScope({ ...scope, courseId: e.target.value })}>
-                  <option value="all">全部資料</option>
-                  {data.courses.map((c) => <option key={c.id} value={c.id}>{c.unit}・{c.title}</option>)}
-                </select>
-              </label>
-              <label className="flex min-h-12 items-center gap-3 self-end rounded-lg border px-3"><input type="checkbox" className="size-5 accent-primary" checked={scope.anonymous} onChange={(e) => setScope({ ...scope, anonymous: e.target.checked })} /> 匿名匯出（以學員編號取代姓名）</label>
-            </div>
-            <Button size="lg" className="mt-4 w-full tap md:w-auto" onClick={doExport}><Download className="size-5" /> 下載匯出檔</Button>
-            <p className="mt-3 text-xs text-muted-foreground">第一階段以 CSV（每個工作表一個檔案）示範資料內容；第四階段改為 ExcelJS 產生含實際圖表的 .xlsx。</p>
-          </div>
-        )}
+        {tab === "export" && <ExportPanel />}
       </StaffOnly>
     </AppShell>
   );

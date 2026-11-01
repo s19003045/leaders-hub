@@ -14,7 +14,8 @@
     "db:generate": "drizzle-kit generate",
     "test": "node scripts/test.mjs",
     "db:migrate:local": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 migrations apply DB --local --config wrangler.local.json",
-    "db:reset:local": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local"
+    "db:reset:local": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local",
+    "check:export": "node scripts/export-check.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -26,6 +27,7 @@
     "date-fns": "^4.4.0",
     "drizzle-orm": "0.45.2",
     "embla-carousel-react": "^8.6.0",
+    "exceljs": "4.4.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^1.31.0",
     "next": "16.3.4",
