@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { Send } from "lucide-react";
@@ -39,7 +40,7 @@ export default function AdminFormDetailPage() {
   return (
     <AppShell title={form.title} wide>
       <StaffOnly>
-        <PageHeader back="/admin/forms" title={form.title} description={`${data.courses.find((c) => c.id === form.courseId)?.unit}・截止 ${fmtDateTime(form.dueAt)}`} />
+        <PageHeader back="/admin/forms" title={form.title} description={`${data.courses.find((c) => c.id === form.courseId)?.unit}・截止 ${fmtDateTime(form.dueAt)}`} action={<Button asChild variant="outline"><Link href={`/admin/forms/${form.id}/edit`}>編輯</Link></Button>} />
         <div className="mb-4 grid grid-cols-3 gap-2">
           <StatTile label="已填寫" value={submitted.length} hint={`共 ${all.length} 人`} />
           <StatTile label="填寫率" value={`${pct(submitted.length, all.length)}%`} tone={pct(submitted.length, all.length) >= 90 ? "success" : "warning"} />
@@ -68,7 +69,7 @@ export default function AdminFormDetailPage() {
                   );
                 })}
               </ul>
-              {notYet.length > 0 && <Button variant="outline" className="mt-3 w-full tap" onClick={() => toast.success(`已對 ${notYet.length} 位學員送出提醒（示範）`)}>提醒未填寫的 {notYet.length} 位學員</Button>}
+              {notYet.length > 0 && <Button variant="outline" className="mt-3 w-full tap" onClick={() => store.remind("form", form.id).then((r) => toast.success(`已通知 ${r.notified} 位學員${r.lineGroup ? "，並推播到 LINE 群組" : ""}${r.linePersonal ? `，LINE 個人通知 ${r.linePersonal} 位` : ""}`), (e: Error) => toast.error(e.message))}>提醒未填寫的 {notYet.length} 位學員</Button>}
             </div>
             <div>
               {sel ? <ResponseDetail sub={sel} formId={form.id} /> : <EmptyState title="點選左側學員查看回答" hint="可針對整份表單或個別題目留言" />}

@@ -70,7 +70,7 @@ export function QuestionField({ index, q, value, onChange, readOnly }: { index: 
       const files = Array.isArray(value) ? (value as FileRef[]) : [];
       return (
         <Field label={title} required={q.required} hint={q.description}>
-          {readOnly ? <div className="text-sm text-muted-foreground">{files.length ? files.map((f) => f.name).join("、") : "未上傳"}</div> : <FilePicker files={files} onChange={(f) => onChange(f)} accept={["jpg", "jpeg", "png", "pdf"]} />}
+          {readOnly ? <div className="text-sm text-muted-foreground">{files.length ? files.map((f) => f.name).join("、") : "未上傳"}</div> : <FilePicker files={files} onChange={(f) => onChange(f)} accept={["jpg", "jpeg", "png", "pdf"]} maxSizeMB={20} purpose="form" />}
         </Field>
       );
     }

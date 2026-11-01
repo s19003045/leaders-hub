@@ -15,7 +15,7 @@ export interface AuthContext {
 }
 
 function rowToUser(r: typeof users.$inferSelect): User {
-  return { id: r.id, name: r.name, email: r.email, role: r.role as Role, title: r.title ?? undefined, company: r.company ?? undefined, active: r.active, createdAt: r.createdAt };
+  return { id: r.id, name: r.name, email: r.email, role: r.role as Role, title: r.title ?? undefined, company: r.company ?? undefined, active: r.active, lineBound: !!r.lineUserId, createdAt: r.createdAt };
 }
 
 /**

@@ -1,44 +1,60 @@
 "use client";
 
-import { useRef } from "react";
-import { Paperclip } from "lucide-react";
+import { useRef, useState } from "react";
+import { Loader2, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { FileChip } from "@/components/ui-bits";
+import { store } from "@/lib/store";
 import type { FileRef } from "@/lib/types";
 
+export type UploadPurpose = "assignment" | "material" | "form" | "article";
+
 /**
- * 第一階段：只記錄檔名與大小，不真正上傳。
- * 第二階段：改為先向 /api/uploads 取得 R2 上傳網址，上傳後再把 FileRef 存回。
+ * 選擇檔案後立即上傳到 R2（POST /api/uploads），成功後以 FileRef（id 為 R2 key）回傳。
+ * 前端先做格式與大小檢查，伺服器端會再檢查一次。
  */
-export function FilePicker({ files, onChange, accept, maxSizeMB = 10, multiple = true, label = "選擇檔案" }: { files: FileRef[]; onChange: (files: FileRef[]) => void; accept?: string[]; maxSizeMB?: number; multiple?: boolean; label?: string }) {
+export function FilePicker({ files, onChange, accept, maxSizeMB = 10, multiple = true, label = "選擇檔案", purpose }: { files: FileRef[]; onChange: (files: FileRef[]) => void; accept?: string[]; maxSizeMB?: number; multiple?: boolean; label?: string; purpose: UploadPurpose }) {
   const ref = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState<string[]>([]);
   const acceptAttr = accept?.map((ext) => `.${ext}`).join(",");
 
-  const pick = (list: FileList | null) => {
+  const pick = async (list: FileList | null) => {
     if (!list) return;
-    const next: FileRef[] = [...files];
-    for (const f of Array.from(list)) {
+    const picked = Array.from(list).filter((f) => {
       if (f.size > maxSizeMB * 1024 * 1024) {
         toast.error(`${f.name} 超過 ${maxSizeMB} MB 限制`);
-        continue;
+        return false;
       }
       const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
       if (accept && !accept.includes(ext)) {
         toast.error(`${f.name} 不是允許的格式（${accept.join("、")}）`);
-        continue;
+        return false;
       }
-      next.push({ id: `fl-${Math.random().toString(36).slice(2, 9)}`, name: f.name, size: f.size, mime: f.type || "application/octet-stream" });
-    }
-    onChange(multiple ? next : next.slice(-1));
+      return true;
+    });
     if (ref.current) ref.current.value = "";
+    if (picked.length === 0) return;
+    setUploading(picked.map((f) => f.name));
+    let next = multiple ? [...files] : [];
+    for (const f of picked) {
+      try {
+        const uploaded = await store.uploadFile(f, purpose);
+        next = multiple ? [...next, uploaded] : [uploaded];
+        onChange(next);
+      } catch (e) {
+        toast.error(`${f.name}：${(e as Error).message}`);
+      } finally {
+        setUploading((u) => u.filter((n) => n !== f.name));
+      }
+    }
   };
 
   return (
     <div className="space-y-2">
-      <input ref={ref} type="file" className="hidden" accept={acceptAttr} multiple={multiple} onChange={(e) => pick(e.target.files)} />
-      <Button type="button" variant="outline" size="lg" onClick={() => ref.current?.click()} className="w-full justify-center tap sm:w-auto">
-        <Paperclip className="size-5" /> {label}
+      <input ref={ref} type="file" className="hidden" accept={acceptAttr} multiple={multiple} onChange={(e) => void pick(e.target.files)} />
+      <Button type="button" variant="outline" size="lg" disabled={uploading.length > 0} onClick={() => ref.current?.click()} className="w-full justify-center tap sm:w-auto">
+        {uploading.length > 0 ? <Loader2 className="size-5 animate-spin" /> : <Paperclip className="size-5" />} {uploading.length > 0 ? `上傳中（${uploading.length}）…` : label}
       </Button>
       {accept && <p className="text-sm text-muted-foreground">允許格式：{accept.join("、")}；每檔最大 {maxSizeMB} MB</p>}
       {files.length > 0 && (

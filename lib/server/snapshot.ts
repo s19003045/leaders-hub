@@ -22,6 +22,7 @@ import type {
   User,
 } from "@/lib/types";
 import { visibleArticles } from "@/lib/selectors";
+import { fileHref } from "@/lib/format";
 import { isStaffRole } from "./auth";
 
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {
@@ -83,7 +84,7 @@ export async function loadSnapshot(db: Db): Promise<Snapshot> {
     db.select().from(t.auditLogs).all(),
   ]);
 
-  const users: User[] = userRows.map((r) => ({ id: r.id, name: r.name, email: r.email, role: r.role, title: r.title ?? undefined, company: r.company ?? undefined, active: r.active, createdAt: r.createdAt }));
+  const users: User[] = userRows.map((r) => ({ id: r.id, name: r.name, email: r.email, role: r.role, title: r.title ?? undefined, company: r.company ?? undefined, active: r.active, lineBound: !!r.lineUserId, createdAt: r.createdAt }));
 
   const groups: Group[] = groupRows.map((g) => ({
     id: g.id,
@@ -120,7 +121,7 @@ export async function loadSnapshot(db: Db): Promise<Snapshot> {
   const filesByVersion = new Map<string, FileRef[]>();
   for (const f of fileRows) {
     const list = filesByVersion.get(f.versionId) ?? [];
-    list.push({ id: f.id, name: f.name, size: f.size, mime: f.mime });
+    list.push({ id: f.r2Key || f.id, name: f.name, size: f.size, mime: f.mime });
     filesByVersion.set(f.versionId, list);
   }
   const versionsBySub = new Map<string, SubmissionVersion[]>();
@@ -147,7 +148,7 @@ export async function loadSnapshot(db: Db): Promise<Snapshot> {
     };
   });
 
-  const materials: Material[] = materialRows.map((m) => ({ id: m.id, courseId: m.courseId, title: m.title, type: m.type, description: m.description, url: m.url ?? undefined, file: m.fileName ? { id: `mf-${m.id}`, name: m.fileName, size: m.fileSize ?? 0, mime: m.fileMime ?? "application/octet-stream" } : undefined, uploadedBy: m.uploadedBy, createdAt: m.createdAt, pinned: m.pinned }));
+  const materials: Material[] = materialRows.map((m) => ({ id: m.id, courseId: m.courseId, title: m.title, type: m.type, description: m.description, url: m.url ?? undefined, file: m.fileName ? { id: m.r2Key ?? `mf-${m.id}`, name: m.fileName, size: m.fileSize ?? 0, mime: m.fileMime ?? "application/octet-stream" } : undefined, uploadedBy: m.uploadedBy, createdAt: m.createdAt, pinned: m.pinned }));
 
   const commentsByArticle = new Map<string, Comment[]>();
   for (const c of commentRows) {
@@ -155,7 +156,7 @@ export async function loadSnapshot(db: Db): Promise<Snapshot> {
     list.push({ id: c.id, authorId: c.authorId, content: c.content, createdAt: c.createdAt });
     commentsByArticle.set(c.articleId, list);
   }
-  const articles: Article[] = articleRows.map((a) => ({ id: a.id, authorId: a.authorId, title: a.title, content: a.content, category: a.category, tags: parseJson<string[]>(a.tags, []), visibility: a.visibility, courseId: a.courseId ?? undefined, classId: a.classId ?? undefined, link: a.link ?? undefined, createdAt: a.createdAt, comments: commentsByArticle.get(a.id) ?? [] }));
+  const articles: Article[] = articleRows.map((a) => ({ id: a.id, authorId: a.authorId, title: a.title, content: a.content, category: a.category, tags: parseJson<string[]>(a.tags, []), visibility: a.visibility, courseId: a.courseId ?? undefined, classId: a.classId ?? undefined, link: a.link ?? undefined, imageUrl: a.imageR2Key ? (fileHref(a.imageR2Key) ?? undefined) : undefined, createdAt: a.createdAt, comments: commentsByArticle.get(a.id) ?? [] }));
 
   const notifications: Notification[] = notificationRows.map((n) => ({ id: n.id, userId: n.userId, title: n.title, body: n.body, href: n.href, createdAt: n.createdAt, read: n.read }));
 

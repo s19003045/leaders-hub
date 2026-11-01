@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ChevronRight, FileText, Image as ImageIcon, Link2, Music, Presentation, Video, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { dueInfo, fileSize, type DueTone } from "@/lib/format";
+import { dueInfo, fileHref, fileSize, type DueTone } from "@/lib/format";
 import type { FileRef, MaterialType, ReviewStatus, SubmitStatus } from "@/lib/types";
 import { reviewStatusLabel, submitStatusLabel } from "@/lib/format";
 
@@ -136,10 +136,11 @@ export function Avatar({ name, size = "md" }: { name: string; size?: "sm" | "md"
 export const materialIcon: Record<MaterialType, LucideIcon> = { pdf: FileText, doc: FileText, ppt: Presentation, image: ImageIcon, audio: Music, video: Video, link: Link2 };
 
 export function FileChip({ file, onRemove }: { file: FileRef; onRemove?: () => void }) {
+  const href = fileHref(file.id);
   return (
     <span className="inline-flex max-w-full items-center gap-2 rounded-lg border bg-muted/60 px-3 py-1.5 text-sm">
       <FileText className="size-4 shrink-0 text-primary" />
-      <span className="truncate">{file.name}</span>
+      {href ? <a href={href} target="_blank" rel="noreferrer" className="truncate text-primary underline">{file.name}</a> : <span className="truncate">{file.name}</span>}
       <span className="shrink-0 text-muted-foreground">{fileSize(file.size)}</span>
       {onRemove && (
         <button type="button" onClick={onRemove} className="ml-1 shrink-0 rounded px-1 text-muted-foreground hover:text-destructive" aria-label="移除檔案">

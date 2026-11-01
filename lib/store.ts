@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import type { Article, Assignment, AnswerValue, FileRef, Form, Group, Material, Snapshot, User } from "./types";
+import type { Article, Assignment, AnswerValue, Course, FileRef, Form, Group, Material, Snapshot, User } from "./types";
 
 /**
  * 第二階段資料層：前端只保留一份由 /api/state 取得的快照（依角色裁切），
@@ -29,12 +29,20 @@ export class ApiError extends Error {
 
 const emptySnapshot: Snapshot = { users: [], classes: [], enrollments: [], courses: [], groups: [], forms: [], formSubmissions: [], feedback: [], assignments: [], assignmentSubmissions: [], materials: [], articles: [], notifications: [], auditLogs: [] };
 
+export interface Features {
+  line: boolean;
+  lineGroup: boolean;
+  r2: boolean;
+  signedLinks: boolean;
+}
+
 interface StoreState {
   data: Snapshot;
   currentUser: User | null;
   hydrated: boolean;
   loading: boolean;
   error: string | null;
+  features: Features;
 }
 
 type Listener = () => void;
@@ -61,7 +69,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 class AppStore {
-  private state: StoreState = { data: emptySnapshot, currentUser: null, hydrated: false, loading: false, error: null };
+  private state: StoreState = { data: emptySnapshot, currentUser: null, hydrated: false, loading: false, error: null, features: { line: false, lineGroup: false, r2: false, signedLinks: false } };
   private listeners = new Set<Listener>();
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -81,10 +89,22 @@ class AppStore {
   /** 進入網站時載入；之後視窗回到前景或每 60 秒重新整理一次（多人同時操作時保持新鮮）。 */
   async hydrate() {
     if (typeof window === "undefined" || this.state.hydrated) return;
-    await this.refresh();
+    await Promise.all([this.refresh(), this.loadFeatures()]);
     this.set({ hydrated: true });
     window.addEventListener("focus", () => void this.refresh());
     this.refreshTimer ??= setInterval(() => void this.refresh(), 60_000);
+  }
+
+  private async loadFeatures() {
+    try {
+      const res = await fetch("/api/me", { credentials: "same-origin" });
+      if (res.ok) {
+        const { features } = (await res.json()) as { features?: Features };
+        if (features) this.set({ features });
+      }
+    } catch {
+      /* ignore */
+    }
   }
 
   async refresh() {
@@ -209,6 +229,45 @@ class AppStore {
     return this.mutate("PUT", `users/${id}`, { name, email, role, title, company, active });
   }
 
+  // ---------- 檔案（R2） ----------
+  async uploadFile(file: File, purpose: "assignment" | "material" | "form" | "article"): Promise<FileRef> {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("purpose", purpose);
+    const res = await fetch("/api/uploads", { method: "POST", body: fd, credentials: "same-origin" });
+    const payload = (await res.json().catch(() => ({}))) as { error?: string } & FileRef;
+    if (!res.ok) throw new ApiError(res.status, payload.error ?? `上傳失敗（${res.status}）`);
+    return payload;
+  }
+
+  /** 限時簽章連結（15 分鐘），可在新分頁開啟或貼到 LINE。 */
+  fileLink(key: string, download = false) {
+    return request<{ url: string; expiresAt: string }>("POST", "files/link", { key, download });
+  }
+
+  // ---------- 提醒 / LINE ----------
+  remind(type: "form" | "assignment", id: string) {
+    return this.mutate<{ title: string; notified: number; linePersonal: number; lineGroup: boolean; done: number; total: number }>("POST", "reminders", { type, id });
+  }
+
+  lineBindCode() {
+    return request<{ code: string }>("POST", "line/bind-code", {});
+  }
+
+  unbindLine() {
+    return this.mutate("POST", "line/unbind", {});
+  }
+
+  // ---------- 課程 / 表單編輯 ----------
+  async upsertCourse(id: string | null, input: Omit<Course, "id" | "classId" | "teacherId"> & { teacherId?: string }) {
+    const res = await this.mutate<{ id: string }>(id ? "PUT" : "POST", id ? `courses/${id}` : "courses", input);
+    return res.id;
+  }
+
+  updateForm(id: string, input: Omit<Form, "id" | "createdAt" | "createdBy" | "questions"> & { questions?: Form["questions"] }) {
+    return this.mutate("PUT", `forms/${id}`, input);
+  }
+
   // ---------- 通知 ----------
   markNotificationsRead(ids: string[]) {
     if (ids.length === 0) return Promise.resolve();
@@ -232,4 +291,8 @@ export function useCurrentUser(): User | null {
 
 export function useHydrated() {
   return useStoreState().hydrated;
+}
+
+export function useFeatures() {
+  return useStoreState().features;
 }

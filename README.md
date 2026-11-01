@@ -3,8 +3,9 @@
 教會「職場領袖聚集」的教學管理平台：課程、線上表單、個人／分組作業、教材中心、文章分享、統計與匯出。
 繁體中文、mobile-first，目標使用者 42～65 歲。
 
-**目前狀態：第二階段完成。** 所有頁面可操作，資料存在 Cloudflare D1，讀寫經由 Workers API 並在伺服器端做角色授權；
-登入以 ChatGPT 帳號（Sign in with ChatGPT）對應 `users` 表。檔案上傳（R2）與 LINE 推播為第三階段。
+**目前狀態：第三階段完成。** 所有頁面可操作，資料存在 Cloudflare D1，讀寫經由 Workers API 並在伺服器端做角色授權；
+登入以 ChatGPT 帳號（Sign in with ChatGPT）對應 `users` 表；附件上傳到 R2 並受權限保護；新內容與截止提醒推播到 LINE。
+第四階段剩 ExcelJS 匯出。
 
 相關文件：
 
@@ -13,6 +14,7 @@
 - [docs/03-活絡平台使用建議.md](docs/03-活絡平台使用建議.md) — 讓成員持續使用平台的機制
 - [docs/04-交給ChatGPT-Sites部署.md](docs/04-交給ChatGPT-Sites部署.md) — 把程式碼交給 ChatGPT 建置與發佈的步驟與注意事項
 - [docs/05-第二階段-資料庫與API.md](docs/05-第二階段-資料庫與API.md) — D1 schema、API、登入對應、授權與樂觀鎖
+- [docs/06-第三階段-檔案與LINE推播.md](docs/06-第三階段-檔案與LINE推播.md) — R2 上傳與權限、限時連結、LINE 官方帳號設定與綁定、截止提醒
 
 ## 技術架構（與 ChatGPT Sites 相容）
 
@@ -21,7 +23,8 @@
 | 前端 | Vinext（Next.js App Router 風格）、React 19、TypeScript、Tailwind CSS 4、shadcn/ui（vendored） | 所有頁面為 client component |
 | 後端 | Cloudflare Workers（`worker/index.ts` → `app/api/[...path]/route.ts`） | 讀寫全部經 `lib/server/*`，授權在伺服器端 |
 | 資料庫 | Cloudflare D1 + Drizzle（`db/schema.ts`、`drizzle/` migration） | Sites 部署時自動套用 migration |
-| 檔案 | Cloudflare R2（binding `BUCKET`） | 第三階段啟用；目前只記錄檔名與大小 |
+| 檔案 | Cloudflare R2（binding `BUCKET`，`lib/server/files.ts`） | 上傳即存 R2；下載經 `/api/files/{key}` 檢查權限，或 15 分鐘限時簽章連結 |
+| 通知 | 站內通知 + LINE Messaging API（`lib/server/line.ts`、`reminders.ts`） | 公告推群組、個人事件推已綁定者；截止前 3 天／1 天惰性排程提醒 |
 | 登入 | Sign in with ChatGPT（`lib/chatgpt-auth.ts` 讀取 `oai-authenticated-user-*` header → `lib/server/auth.ts` 對應 `users`） | 本機開發由 `scripts/vite/sites-vite-plugin.ts` 模擬；`DEMO_LOGIN=1` 另提供示範身分 |
 | 圖表 | Recharts | 統計頁 |
 
@@ -68,9 +71,12 @@ lib/
   server/
     auth.ts            identify()：ChatGPT Email → users、INITIAL_ADMIN_EMAIL、示範登入
     snapshot.ts        D1 → Snapshot，依角色裁切
-    mutations.ts       所有寫入：zod 驗證、授權、樂觀鎖
+    mutations.ts       所有寫入：zod 驗證、授權、樂觀鎖、LINE 推播
+    files.ts           R2 上傳、讀取權限、限時簽章連結
+    line.ts            LINE Messaging API 推播、webhook 驗簽、綁定代碼
+    reminders.ts       截止提醒（惰性排程＋老師手動）
     seed-db.ts         示範資料寫入 / 清空
-    http.ts, db.ts     錯誤、JSON、cookie、Drizzle 連線
+    http.ts, db.ts, context.ts  錯誤、JSON、cookie、Drizzle 連線、請求範圍環境
 db/
   schema.ts            D1 Drizzle schema（22 張表）
 drizzle/               migration（pnpm db:generate 產生；Sites 部署自動套用）
@@ -85,7 +91,7 @@ docs/                  規劃文件
 corepack pnpm install --frozen-lockfile
 ```
 
-複製 `.env.example` 為 `.dev.vars`，本機建議：`DEMO_LOGIN=1`、`SEED_DEMO_DATA=1`、`INITIAL_ADMIN_EMAIL=seedy@sites.test`。然後建立本機 D1：
+複製 `.env.example` 為 `.dev.vars`，本機建議：`DEMO_LOGIN=1`、`SEED_DEMO_DATA=1`、`INITIAL_ADMIN_EMAIL=seedy@sites.test`、`FILE_LINK_SECRET=任意長字串`（LINE 三個變數可留空）。然後建立本機 D1：
 
 ```bash
 corepack pnpm db:migrate:local
@@ -127,6 +133,6 @@ pnpm build
 
 1. **第一階段（完成）**：可操作原型、模擬資料、全部頁面可切換。
 2. **第二階段（完成）**：D1 migration、`/api/*` 以 Drizzle 讀寫 D1、ChatGPT 登入對應 `users.email`、伺服器端角色授權與樂觀鎖。
-3. **第三階段**：R2 檔案上傳與限時連結、通知（站內＋LINE 推播）、完整表單／作業／教材／文章 API。
+3. **第三階段（完成）**：R2 檔案上傳與限時連結、LINE 推播與綁定、截止提醒、課程與表單編輯。
 4. **第四階段**：統計儀表板資料改由 API 彙整、ExcelJS 產生含圖表的 `.xlsx`。
 5. **第五階段**：權限、安全、上傳限制、多人操作測試後正式發佈。

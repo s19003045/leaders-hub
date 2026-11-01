@@ -77,7 +77,7 @@ export default function NewAssignmentPage() {
             <Field label="作業名稱" required><Input className="min-h-12 text-base" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例如：第六課 個人作業：一次自然的信仰對話" /></Field>
             <Field label="所屬課程" required><select className={sel} value={courseId} onChange={(e) => setCourseId(e.target.value)}>{data.courses.map((c) => <option key={c.id} value={c.id}>{c.unit}・{c.title}</option>)}</select></Field>
             <div className="md:col-span-2"><Field label="題目與作業要求" required><Textarea rows={5} className="text-base" value={description} onChange={(e) => setDescription(e.target.value)} /></Field></div>
-            <div className="md:col-span-2"><Field label="附加說明文件或範例"><FilePicker files={attachments} onChange={setAttachments} maxSizeMB={20} /></Field></div>
+            <div className="md:col-span-2"><Field label="附加說明文件或範例"><FilePicker files={attachments} onChange={setAttachments} maxSizeMB={20} purpose="material" /></Field></div>
           </div>
         </Section>
         <Section title="繳交設定">

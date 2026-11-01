@@ -10,7 +10,10 @@ DEMO_LOGIN=
 # "1" 時資料庫為空會自動寫入示範資料，並允許「重設示範資料」。正式站請留空！
 SEED_DEMO_DATA=
 
-# 第三階段（選用）：LINE Messaging API 推播
+# 限時下載連結用的密鑰（任意 32 字元以上隨機字串；可用 openssl rand -hex 32 產生）
+FILE_LINK_SECRET=
+
+# LINE Messaging API（官方帳號）。三個都填才會推播；LINE_GROUP_ID 可在把官方帳號加入群組後，由 webhook 回覆取得
 LINE_CHANNEL_ACCESS_TOKEN=
 LINE_CHANNEL_SECRET=
 LINE_GROUP_ID=

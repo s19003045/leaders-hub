@@ -48,9 +48,9 @@ export default function AdminUsersPage() {
         )}
         <ul className="divide-y rounded-2xl border bg-card">
           {list.map((u) => (
-            <li key={u.id} className="flex items-center gap-3 px-4 py-3">
+            <li key={u.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
               <Avatar name={u.name} />
-              <span className="min-w-0 flex-1">
+              <span className="min-w-0 flex-1 basis-56">
                 <span className="block font-medium">{u.name}{!u.active && <span className="ml-2 text-xs text-destructive">已停用</span>}</span>
                 <span className="block truncate text-sm text-muted-foreground">{u.email}{u.company ? `・${u.company}` : ""}{groupOfUser(data, u.id) ? `・${groupOfUser(data, u.id)!.name}` : ""}</span>
               </span>

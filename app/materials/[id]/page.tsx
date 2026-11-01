@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, PageHeader, Pill, materialIcon } from "@/components/ui-bits";
 import { useData } from "@/lib/store";
 import { courseById, userName } from "@/lib/selectors";
-import { fileSize, fmtDateTime, materialTypeLabel } from "@/lib/format";
+import { fileHref, fileSize, fmtDateTime, materialTypeLabel } from "@/lib/format";
 
 export default function MaterialDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -17,7 +17,9 @@ export default function MaterialDetailPage() {
   if (!m) return <AppShell title="教材"><EmptyState title="找不到教材" /></AppShell>;
   const Icon = materialIcon[m.type];
   const course = courseById(data, m.courseId);
-  const mock = () => toast.info("第一階段為示範資料，正式版會開啟 R2 的限時下載連結。");
+  const mock = () => toast.info("這是示範資料，沒有實際檔案；老師上傳的教材會提供預覽與下載。");
+  const viewHref = m.file ? fileHref(m.file.id) : null;
+  const downloadHref = m.file ? fileHref(m.file.id, true) : null;
 
   return (
     <AppShell title={m.title}>
@@ -42,10 +44,17 @@ export default function MaterialDetailPage() {
           {m.url ? (
             <Button asChild size="lg" className="flex-1 tap"><a href={m.url} target="_blank" rel="noreferrer"><ExternalLink className="size-5" /> 開啟連結</a></Button>
           ) : (
-            <>
-              <Button size="lg" className="flex-1 tap" onClick={mock}><Eye className="size-5" /> 線上預覽</Button>
-              <Button size="lg" variant="outline" className="flex-1 tap" onClick={mock}><Download className="size-5" /> 下載</Button>
-            </>
+            viewHref && downloadHref ? (
+              <>
+                <Button asChild size="lg" className="flex-1 tap"><a href={viewHref} target="_blank" rel="noreferrer"><Eye className="size-5" /> 線上預覽</a></Button>
+                <Button asChild size="lg" variant="outline" className="flex-1 tap"><a href={downloadHref}><Download className="size-5" /> 下載</a></Button>
+              </>
+            ) : (
+              <>
+                <Button size="lg" className="flex-1 tap" onClick={mock}><Eye className="size-5" /> 線上預覽</Button>
+                <Button size="lg" variant="outline" className="flex-1 tap" onClick={mock}><Download className="size-5" /> 下載</Button>
+              </>
+            )
           )}
         </div>
       </div>

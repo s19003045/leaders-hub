@@ -58,6 +58,7 @@ export default function ArticleDetailPage() {
         {a.tags.map((t) => <Pill key={t}>#{t}</Pill>)}
       </div>
       <article className="rounded-2xl border bg-card p-4">
+        {a.imageUrl && <img src={a.imageUrl} alt="" className="mb-3 max-h-96 w-full rounded-xl object-cover" />}
         <p className="whitespace-pre-wrap leading-relaxed">{a.content}</p>
         {a.link && <a href={a.link} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-primary underline break-all"><ExternalLink className="size-4" />{a.link}</a>}
       </article>

@@ -15,7 +15,16 @@ export const users = sqliteTable("users", {
   title: text("title"),
   company: text("company"),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
+  lineUserId: text("line_user_id"), // 綁定 LINE 官方帳號後的使用者 ID（個人推播用）
+  lineBindCode: text("line_bind_code"), // 綁定代碼（使用者在 LINE 傳送此代碼完成綁定）
   createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+/** 平台設定與排程狀態（key/value），例如提醒最後執行時間、已送出的提醒記錄。 */
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
 

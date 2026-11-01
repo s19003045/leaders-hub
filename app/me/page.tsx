@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Avatar, ListRow, Section } from "@/components/ui-bits";
+import { LineBinding } from "@/components/line-binding";
 import { store, useCurrentUser, useData } from "@/lib/store";
 import { groupOfUser, isStaff, studentCompletion, unreadCounts } from "@/lib/selectors";
 import { roleLabel } from "@/lib/format";
@@ -57,6 +58,10 @@ export default function MePage() {
           {isStaff(user) && <ListRow href="/admin/stats" icon={FileStack} title="統計與 Excel 匯出" />}
           {isStaff(user) && <ListRow href="/admin/groups" icon={UsersRound} title="小組管理" />}
         </div>
+      </Section>
+
+      <Section title="通知設定">
+        <LineBinding />
       </Section>
 
       <Section title="顯示設定">

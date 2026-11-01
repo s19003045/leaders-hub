@@ -37,7 +37,7 @@ export default function NotificationsPage() {
           ))}
         </ul>
       )}
-      <p className="mt-6 rounded-xl bg-muted p-3 text-sm text-muted-foreground">正式版規劃：重要通知（新教材、截止前提醒、老師回覆）會同步推送到 LINE，不必打開網站也能收到。</p>
+      <p className="mt-6 rounded-xl bg-muted p-3 text-sm text-muted-foreground">新教材、新表單與作業會推播到 LINE 群組；老師回覆、批改與截止提醒會傳給已綁定 LINE 的成員（到「我的 → LINE 通知」綁定）。</p>
     </AppShell>
   );
 }

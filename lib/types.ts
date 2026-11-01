@@ -13,6 +13,7 @@ export interface User {
   title?: string; // 顯示用職稱，例如「講師」「助教」
   company?: string; // 職場領袖的服務單位（選填）
   active: boolean;
+  lineBound?: boolean; // 已綁定 LINE 官方帳號（可收個人推播）
   createdAt: string;
 }
 
@@ -210,7 +211,8 @@ export interface Article {
   courseId?: string;
   classId?: string;
   link?: string;
-  imageUrl?: string;
+  imageUrl?: string; // 讀取用（/api/files/…）
+  image?: FileRef; // 建立時的上傳參照
   createdAt: string;
   comments: Comment[];
 }

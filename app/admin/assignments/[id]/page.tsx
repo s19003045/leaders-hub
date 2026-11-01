@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, EmptyState, FileChip, PageHeader, Pill, ReviewStatusPill, StatTile, SubmitStatusPill } from "@/components/ui-bits";
 import { store, useData } from "@/lib/store";
 import { assignmentStats, students, userName } from "@/lib/selectors";
-import { fmtDateTime } from "@/lib/format";
+import { fileHref, fmtDateTime } from "@/lib/format";
 import type { AssignmentSubmission } from "@/lib/types";
 
 interface Row {
@@ -68,7 +68,7 @@ export default function AdminAssignmentDetailPage() {
                 );
               })}
             </ul>
-            {notSubmitted.length > 0 && <Button variant="outline" className="mt-3 w-full tap" onClick={() => toast.success(`已提醒 ${notSubmitted.map((r) => r.label).join("、")}（示範）`)}>提醒未繳交的 {notSubmitted.length} {stat.unit}</Button>}
+            {notSubmitted.length > 0 && <Button variant="outline" className="mt-3 w-full tap" onClick={() => store.remind("assignment", a.id).then((r) => toast.success(`已通知 ${r.notified} 位學員${r.lineGroup ? "，並推播到 LINE 群組" : ""}${r.linePersonal ? `，LINE 個人通知 ${r.linePersonal} 位` : ""}`), (e: Error) => toast.error(e.message))}>提醒未繳交的 {notSubmitted.length} {stat.unit}</Button>}
           </div>
           <div>{sel?.sub ? <GradePanel key={sel.sub.id} sub={sel.sub} gradingMode={a.gradingMode} label={sel.label} /> : <EmptyState title="點選左側查看並批改作業" />}</div>
         </div>
@@ -82,7 +82,7 @@ function GradePanel({ sub, gradingMode, label }: { sub: AssignmentSubmission; gr
   const latest = sub.versions[sub.versions.length - 1];
   const [score, setScore] = useState<string>(sub.review?.score?.toString() ?? "");
   const [comment, setComment] = useState(sub.review?.comment ?? "");
-  const mock = () => toast.info("第一階段為示範資料，正式版會開啟 R2 限時連結。");
+  const mock = () => toast.info("示範資料沒有實際檔案；學員實際上傳的附件可直接預覽與下載。");
 
   const save = async (requestResubmit: boolean) => {
     if (gradingMode !== "comment" && !requestResubmit && score === "") return toast.error("請輸入分數");
@@ -111,8 +111,17 @@ function GradePanel({ sub, gradingMode, label }: { sub: AssignmentSubmission; gr
             {latest.files.map((f) => (
               <div key={f.id} className="flex flex-wrap items-center gap-2">
                 <FileChip file={f} />
-                <Button size="sm" variant="outline" onClick={mock}><Eye className="size-4" /> 預覽</Button>
-                <Button size="sm" variant="outline" onClick={mock}><Download className="size-4" /> 下載</Button>
+                {fileHref(f.id) ? (
+                  <>
+                    <Button asChild size="sm" variant="outline"><a href={fileHref(f.id)!} target="_blank" rel="noreferrer"><Eye className="size-4" /> 預覽</a></Button>
+                    <Button asChild size="sm" variant="outline"><a href={fileHref(f.id, true)!}><Download className="size-4" /> 下載</a></Button>
+                  </>
+                ) : (
+                  <>
+                    <Button size="sm" variant="outline" onClick={mock}><Eye className="size-4" /> 預覽</Button>
+                    <Button size="sm" variant="outline" onClick={mock}><Download className="size-4" /> 下載</Button>
+                  </>
+                )}
               </div>
             ))}
           </div>

@@ -204,7 +204,7 @@ function Composer({ assignment, groupName, ownerType, ownerId, sub, hasSubmitted
           <Textarea rows={6} className="text-base" value={text} onChange={(e) => setText(e.target.value)} placeholder="在這裡輸入內容…" />
         </Field>
         <Field label="上傳檔案">
-          <FilePicker files={files} onChange={setFiles} accept={assignment.formats} maxSizeMB={assignment.maxSizeMB} />
+          <FilePicker files={files} onChange={setFiles} accept={assignment.formats} maxSizeMB={assignment.maxSizeMB} purpose="assignment" />
         </Field>
         <Field label="外部文件連結" hint="例如 Google 文件、Canva、雲端硬碟連結">
           <Input className="min-h-12 text-base" type="url" inputMode="url" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://" />

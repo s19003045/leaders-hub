@@ -4,6 +4,9 @@ import * as t from "@/db/schema";
 import type { Db } from "./db";
 import { isStaffRole } from "./auth";
 import { HttpError, conflict, forbidden, newId, notFound, nowIso } from "./http";
+import { getRequestContext } from "./context";
+import { assertOwnedKeys } from "./files";
+import { lineEnabled, newBindCode, pushGroup, pushText } from "./line";
 import type { AnswerValue, FileRef, Group, Role, User } from "@/lib/types";
 
 /**
@@ -24,11 +27,29 @@ async function insertChunked<T>(rows: T[], size: number, insert: (rows: T[]) => 
   for (let i = 0; i < rows.length; i += size) await insert(rows.slice(i, i + size));
 }
 
-async function notify(db: Db, actorId: string, userIds: string[], title: string, body: string, href: string) {
+/**
+ * 站內通知 + LINE 推播。
+ * broadcast=true（新教材、新表單、新作業、新文章）→ 推一則到 LINE 群組；
+ * 其餘（老師回覆、批改、小組提交）→ 推給已綁定 LINE 的個人。
+ */
+async function notify(db: Db, actorId: string, userIds: string[], title: string, body: string, href: string, opts: { broadcast?: boolean } = {}) {
   const ids = [...new Set(userIds)].filter((id) => id !== actorId);
   if (ids.length === 0) return;
   const now = nowIso();
   await insertChunked(ids.map((userId) => ({ id: newId("n"), userId, title, body, href, read: false, createdAt: now })), 10, (rows) => db.insert(t.notifications).values(rows));
+  const ctx = getRequestContext();
+  if (!ctx || !lineEnabled(ctx.env)) return;
+  const link = `${ctx.origin}${href}`;
+  try {
+    if (opts.broadcast) {
+      await pushGroup(ctx.env, `【${title}】${body}\n${link}`);
+    } else {
+      const rows = await db.select({ id: t.users.id, lineUserId: t.users.lineUserId }).from(t.users).where(inArray(t.users.id, ids)).all();
+      for (const r of rows) if (r.lineUserId) await pushText(ctx.env, r.lineUserId, `${title}\n${body}\n${link}`);
+    }
+  } catch (e) {
+    console.error("LINE push failed", e);
+  }
 }
 
 async function audit(db: Db, actorId: string, action: string, target: string) {
@@ -121,7 +142,7 @@ export async function createForm(db: Db, user: User, body: unknown) {
   await db.insert(t.forms).values({ id, courseId: input.courseId, title: input.title, description: input.description, openAt: input.openAt, dueAt: input.dueAt, allowEdit: input.allowEdit, allowLate: input.allowLate, createdBy: user.id, createdAt: now });
   await insertChunked(input.questions.map((q, i) => ({ id: `${id}:${q.id}`, formId: id, order: i, type: q.type, title: q.title, description: q.description ?? null, required: q.required, options: q.options ? JSON.stringify(q.options) : null, max: q.max ?? null })), 10, (rows) => db.insert(t.questions).values(rows));
   await audit(db, user.id, "建立表單", input.title);
-  await notify(db, user.id, await studentIds(db), "新的表單待填寫", input.title, `/forms/${id}`);
+  await notify(db, user.id, await studentIds(db), "新的表單待填寫", `${input.title}，截止 ${fmtDue(input.dueAt)}`, `/forms/${id}`, { broadcast: true });
   return { id };
 }
 
@@ -168,6 +189,7 @@ export async function submitAssignment(db: Db, user: User, assignmentId: string,
     if (allowed.length && !allowed.includes(ext)) throw new HttpError(400, `${f.name} 不是允許的格式（${allowed.join("、")}）`);
     if (f.size > a.maxSizeMb * 1024 * 1024) throw new HttpError(400, `${f.name} 超過 ${a.maxSizeMb} MB 限制`);
   }
+  assertOwnedKeys(p.files, members, "assignment");
   const now = nowIso();
   const isLate = new Date(a.dueAt).getTime() < Date.now();
   if (new Date(a.openAt).getTime() > Date.now()) throw new HttpError(400, "此作業尚未開放");
@@ -197,7 +219,7 @@ export async function submitAssignment(db: Db, user: User, assignmentId: string,
   }
   const versionId = `${subId}:v${no}`;
   await db.insert(t.submissionVersions).values({ id: versionId, submissionId: subId, no, submittedById: user.id, submittedAt: now, text: p.text, link: p.link ?? null });
-  await insertChunked(p.files.map((f) => ({ id: `${versionId}:${f.id}`, versionId, name: f.name, size: f.size, mime: f.mime, r2Key: "", uploadedAt: now })), 10, (rows) => db.insert(t.assignmentFiles).values(rows));
+  await insertChunked(p.files.map((f) => ({ id: `${versionId}:${crypto.randomUUID().slice(0, 8)}`, versionId, name: f.name, size: f.size, mime: f.mime, r2Key: f.id, uploadedAt: now })), 10, (rows) => db.insert(t.assignmentFiles).values(rows));
   await audit(db, user.id, no > 1 ? "重新提交作業" : "提交作業", a.title);
   if (input.ownerType === "group") {
     const g = await db.select({ name: t.groups.name }).from(t.groups).where(eq(t.groups.id, input.ownerId)).get();
@@ -240,7 +262,7 @@ export async function createAssignment(db: Db, user: User, body: unknown) {
   await db.insert(t.assignments).values({ id, courseId: input.courseId, title: input.title, type: input.type, description: input.description, openAt: input.openAt, dueAt: input.dueAt, formats: JSON.stringify(input.formats), maxSizeMb: input.maxSizeMB, allowLate: input.allowLate, allowResubmit: input.allowResubmit, gradingMode: input.gradingMode, attachments: JSON.stringify(input.attachments), createdBy: user.id, createdAt: nowIso() });
   if (input.type === "group" && input.targetGroupIds?.length) await db.insert(t.assignmentTargets).values(input.targetGroupIds.map((gid) => ({ assignmentId: id, targetType: "group" as const, targetId: gid })));
   await audit(db, user.id, "建立作業", input.title);
-  await notify(db, user.id, await studentIds(db), input.type === "group" ? "新的分組作業" : "新的個人作業", input.title, `/assignments/${id}`);
+  await notify(db, user.id, await studentIds(db), input.type === "group" ? "新的分組作業" : "新的個人作業", `${input.title}，截止 ${fmtDue(input.dueAt)}`, `/assignments/${id}`, { broadcast: true });
   return { id };
 }
 
@@ -262,9 +284,10 @@ export async function addMaterial(db: Db, user: User, body: unknown) {
   requireStaff(user);
   const input = z.object({ courseId: str(100), title: str(200).min(1), type: z.enum(["pdf", "doc", "ppt", "image", "audio", "video", "link"]), description: str(2000), url: z.string().trim().url().max(2000).optional(), file: fileRef.optional(), pinned: z.boolean().optional() }).parse(body);
   const id = newId("m");
-  await db.insert(t.materials).values({ id, courseId: input.courseId, title: input.title, type: input.type, description: input.description, url: input.url ?? null, fileName: input.file?.name ?? null, fileSize: input.file?.size ?? null, fileMime: input.file?.mime ?? null, r2Key: null, pinned: !!input.pinned, uploadedBy: user.id, createdAt: nowIso() });
+  if (input.file) assertOwnedKeys([input.file], [user.id], "material");
+  await db.insert(t.materials).values({ id, courseId: input.courseId, title: input.title, type: input.type, description: input.description, url: input.url ?? null, fileName: input.file?.name ?? null, fileSize: input.file?.size ?? null, fileMime: input.file?.mime ?? null, r2Key: input.file?.id ?? null, pinned: !!input.pinned, uploadedBy: user.id, createdAt: nowIso() });
   await audit(db, user.id, "上傳教材", input.title);
-  await notify(db, user.id, await studentIds(db), "新的教材", input.title, `/materials/${id}`);
+  await notify(db, user.id, await studentIds(db), input.pinned ? "新的教材（課前閱讀）" : "新的教材", input.title, `/materials/${id}`, { broadcast: true });
   return { id };
 }
 
@@ -278,17 +301,18 @@ export async function removeMaterial(db: Db, user: User, id: string) {
 }
 
 // ---------- 文章 ----------
-const articleInput = z.object({ title: str(200).min(1), content: str(20000).min(1), category: str(50), tags: z.array(str(30)).max(20), visibility: z.enum(["draft", "course", "class", "all"]), courseId: str(100).optional(), classId: str(100).optional(), link: z.string().trim().url().max(2000).optional() });
+const articleInput = z.object({ title: str(200).min(1), content: str(20000).min(1), category: str(50), tags: z.array(str(30)).max(20), visibility: z.enum(["draft", "course", "class", "all"]), courseId: str(100).optional(), classId: str(100).optional(), link: z.string().trim().url().max(2000).optional(), image: fileRef.optional() });
 
 export async function createArticle(db: Db, user: User, body: unknown) {
   const input = articleInput.parse(body);
   const id = newId("p");
   const now = nowIso();
-  await db.insert(t.articles).values({ id, authorId: user.id, title: input.title, content: input.content, category: input.category, tags: JSON.stringify(input.tags), visibility: input.visibility, courseId: input.courseId ?? null, classId: input.classId ?? null, link: input.link ?? null, createdAt: now, updatedAt: now });
+  if (input.image) assertOwnedKeys([input.image], [user.id], "article");
+  await db.insert(t.articles).values({ id, authorId: user.id, title: input.title, content: input.content, category: input.category, tags: JSON.stringify(input.tags), visibility: input.visibility, courseId: input.courseId ?? null, classId: input.classId ?? null, link: input.link ?? null, imageR2Key: input.image?.id ?? null, createdAt: now, updatedAt: now });
   if (input.visibility !== "draft") {
     await audit(db, user.id, "發布文章", input.title);
     const staff = await db.select({ id: t.users.id }).from(t.users).where(inArray(t.users.role, ["teacher", "ta", "admin"])).all();
-    await notify(db, user.id, [...(await studentIds(db)), ...staff.map((s) => s.id)], "新的分享文章", input.title, `/articles/${id}`);
+    await notify(db, user.id, [...(await studentIds(db)), ...staff.map((s) => s.id)], "新的分享文章", `${user.name}：${input.title}`, `/articles/${id}`, { broadcast: true });
   }
   return { id };
 }
@@ -380,6 +404,78 @@ export async function markNotificationsRead(db: Db, user: User, body: unknown) {
   if (!ids.length) return { ok: true };
   await db.update(t.notifications).set({ read: true }).where(and(eq(t.notifications.userId, user.id), inArray(t.notifications.id, ids)));
   return { ok: true };
+}
+
+
+function fmtDue(iso: string) {
+  return new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(iso));
+}
+
+// ---------- 課程 ----------
+const courseInput = z.object({ unit: str(50).min(1), title: str(200).min(1), description: str(2000), date: iso, location: str(200).optional(), status: z.enum(["upcoming", "active", "done"]), teacherId: str(100).optional() });
+
+export async function upsertCourse(db: Db, user: User, id: string | null, body: unknown) {
+  requireStaff(user);
+  const input = courseInput.parse(body);
+  const cls = await db.select({ id: t.classes.id }).from(t.classes).get();
+  if (!cls) throw new HttpError(400, "尚未建立班級");
+  const teacherId = input.teacherId ?? user.id;
+  if (id) {
+    const existing = await db.select().from(t.courses).where(eq(t.courses.id, id)).get();
+    if (!existing) throw notFound("課程");
+    await db.update(t.courses).set({ unit: input.unit, title: input.title, description: input.description, date: input.date, location: input.location ?? null, status: input.status, teacherId }).where(eq(t.courses.id, id));
+    await audit(db, user.id, "修改課程", `${input.unit} ${input.title}`);
+    return { id };
+  }
+  const newCourseId = newId("k");
+  await db.insert(t.courses).values({ id: newCourseId, classId: cls.id, unit: input.unit, title: input.title, description: input.description, date: input.date, location: input.location ?? null, status: input.status, teacherId });
+  await audit(db, user.id, "建立課程", `${input.unit} ${input.title}`);
+  return { id: newCourseId };
+}
+
+// ---------- 表單編輯 ----------
+export async function updateForm(db: Db, user: User, id: string, body: unknown) {
+  requireStaff(user);
+  const input = z.object({ courseId: str(100), title: str(200).min(1), description: str(2000), openAt: iso, dueAt: iso, allowEdit: z.boolean(), allowLate: z.boolean(), questions: z.array(questionInput).min(1).max(50).optional() }).parse(body);
+  const form = await db.select().from(t.forms).where(eq(t.forms.id, id)).get();
+  if (!form) throw notFound("表單");
+  await db.update(t.forms).set({ courseId: input.courseId, title: input.title, description: input.description, openAt: input.openAt, dueAt: input.dueAt, allowEdit: input.allowEdit, allowLate: input.allowLate }).where(eq(t.forms.id, id));
+  if (input.questions) {
+    // 已有人作答時只允許修改題目文字與必填，不允許增刪題目（避免既有回答失去對應）
+    const existing = await db.select().from(t.questions).where(eq(t.questions.formId, id)).all();
+    const hasAnswers = (await db.select({ id: t.formSubmissions.id }).from(t.formSubmissions).where(eq(t.formSubmissions.formId, id)).get()) !== undefined;
+    const incoming = input.questions.map((q, i) => ({ ...q, dbId: q.id.startsWith(`${id}:`) ? q.id : `${id}:${q.id}`, order: i }));
+    if (hasAnswers) {
+      const existingIds = new Set(existing.map((q) => q.id));
+      if (incoming.length !== existing.length || incoming.some((q) => !existingIds.has(q.dbId))) throw new HttpError(400, "已有學員作答，無法新增或刪除題目；可修改題目文字與必填。");
+      for (const q of incoming) await db.update(t.questions).set({ title: q.title, description: q.description ?? null, required: q.required, order: q.order, options: q.options ? JSON.stringify(q.options) : null, max: q.max ?? null }).where(eq(t.questions.id, q.dbId));
+    } else {
+      await db.delete(t.questions).where(eq(t.questions.formId, id));
+      await insertChunked(incoming.map((q) => ({ id: q.dbId, formId: id, order: q.order, type: q.type, title: q.title, description: q.description ?? null, required: q.required, options: q.options ? JSON.stringify(q.options) : null, max: q.max ?? null })), 10, (rows) => db.insert(t.questions).values(rows));
+    }
+  }
+  await audit(db, user.id, "修改表單", input.title);
+  return { id };
+}
+
+// ---------- LINE 綁定 ----------
+export async function issueLineBindCode(db: Db, user: User) {
+  const code = newBindCode();
+  await db.update(t.users).set({ lineBindCode: code, updatedAt: nowIso() }).where(eq(t.users.id, user.id));
+  return { code };
+}
+
+export async function unbindLine(db: Db, user: User) {
+  await db.update(t.users).set({ lineUserId: null, lineBindCode: null, updatedAt: nowIso() }).where(eq(t.users.id, user.id));
+  return { ok: true };
+}
+
+/** webhook：以綁定代碼對應使用者並寫入 LINE userId。 */
+export async function bindLineByCode(db: Db, code: string, lineUserId: string) {
+  const row = await db.select().from(t.users).where(eq(t.users.lineBindCode, code.trim().toUpperCase())).get();
+  if (!row) return null;
+  await db.update(t.users).set({ lineUserId, lineBindCode: null, updatedAt: nowIso() }).where(eq(t.users.id, row.id));
+  return { id: row.id, name: row.name };
 }
 
 export type { FileRef };

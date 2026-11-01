@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, PageHeader } from "@/components/ui-bits";
+import { FilePicker } from "@/components/file-picker";
 import { store, useData } from "@/lib/store";
-import type { ArticleVisibility } from "@/lib/types";
+import type { ArticleVisibility, FileRef } from "@/lib/types";
 
 const CATEGORIES = ["見證分享", "資源推薦", "講師分享", "討論", "其他"];
 
@@ -22,6 +23,7 @@ export default function NewArticlePage() {
   const [tags, setTags] = useState("");
   const [link, setLink] = useState("");
   const [visibility, setVisibility] = useState<ArticleVisibility>("all");
+  const [image, setImage] = useState<FileRef[]>([]);
   const [courseId, setCourseId] = useState(data.courses.find((c) => c.status === "active")?.id ?? data.courses[0]?.id ?? "");
   const sel = "min-h-12 w-full rounded-lg border border-input bg-background px-3 text-base";
 
@@ -40,6 +42,7 @@ export default function NewArticlePage() {
       courseId: visibility === "course" ? courseId : undefined,
       classId: visibility === "class" ? data.classes[0]?.id : undefined,
       link: link.trim() || undefined,
+      image: image[0],
     });
     toast.success(asDraft ? "已儲存草稿" : "文章已發布");
     router.push(`/articles/${id}`);
@@ -59,7 +62,7 @@ export default function NewArticlePage() {
           <Field label="標籤" hint="以逗號或空白分隔"><Input className="min-h-12 text-base" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="誠信, 職場見證" /></Field>
         </div>
         <Field label="外部連結（選填）"><Input className="min-h-12 text-base" type="url" inputMode="url" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://" /></Field>
-        <Field label="圖片（選填）" hint="第一階段暫不支援圖片上傳；正式版將上傳至 R2。"><Input className="min-h-12 text-base" type="file" accept="image/*" disabled /></Field>
+        <Field label="圖片（選填）" hint="JPG / PNG / WebP，最大 10 MB"><FilePicker files={image} onChange={setImage} accept={["jpg", "jpeg", "png", "gif", "webp"]} maxSizeMB={10} multiple={false} purpose="article" label="選擇圖片" /></Field>
         <Field label="誰可以看到">
           <select className={sel} value={visibility} onChange={(e) => setVisibility(e.target.value as ArticleVisibility)}>
             <option value="all">全體會員</option>

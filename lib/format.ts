@@ -83,6 +83,12 @@ export const questionTypeLabel: Record<QuestionType, string> = {
   file: "檔案上傳題",
 };
 
+/** R2 key → 受保護下載路徑（需登入；權限在 /api/files 檢查）。非 R2 的示範檔案回傳 null。 */
+export function fileHref(key: string, download = false) {
+  if (!key.startsWith("uploads/")) return null;
+  return `/api/files/${key.split("/").map(encodeURIComponent).join("/")}${download ? "?download=1" : ""}`;
+}
+
 export function pct(n: number, d: number) {
   if (d === 0) return 0;
   return Math.round((n / d) * 1000) / 10;

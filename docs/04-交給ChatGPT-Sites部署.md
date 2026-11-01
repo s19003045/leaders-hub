@@ -14,7 +14,7 @@ cd /opt/church && zip -r leaders-hub-source.zip leaders-hub -x 'leaders-hub/node
 > 1. 保留 `scripts/`、`worker/`、`vite.config.ts`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`，用 `pnpm install --frozen-lockfile` 安裝。
 > 2. `.openai/hosting.json` 已宣告 D1 binding `DB` 與 R2 binding `BUCKET`，請在建立 Site 時綁定並補上 `project_id`。`drizzle/` 內的 migration 請在部署時套用到 D1（Drizzle 產生的 SQL）。
 > 3. 網站存取請設為「只限受邀者」，並啟用 Sign in with ChatGPT。
-> 4. 環境變數：`INITIAL_ADMIN_EMAIL` 填我的 ChatGPT 登入 Email。若這是給大家看的示範站，另外加 `DEMO_LOGIN=1` 與 `SEED_DEMO_DATA=1`；正式站請勿設定這兩個。
+> 4. 環境變數：`INITIAL_ADMIN_EMAIL` 填我的 ChatGPT 登入 Email；`FILE_LINK_SECRET` 填一組隨機長字串。LINE 推播的 `LINE_CHANNEL_ACCESS_TOKEN`、`LINE_CHANNEL_SECRET`、`LINE_GROUP_ID` 我之後再補。若這是給大家看的示範站，另外加 `DEMO_LOGIN=1` 與 `SEED_DEMO_DATA=1`；正式站請勿設定這兩個。
 > 5. 發佈後請回報網址，以及我用 ChatGPT 登入後 `/api/me` 是否回傳我的帳號且 `role` 為 `admin`。
 
 ## 發佈後驗證清單
@@ -25,6 +25,8 @@ cd /opt/church && zip -r leaders-hub-source.zip leaders-hub -x 'leaders-hub/node
 - [ ] 以示範身分進入學員首頁、作業頁、表單頁；老師身分進入後台與統計。
 - [ ] 字級切換、底部導覽在 iPhone / Android 正常。
 - [ ] 分享連結到 LINE 群組後，點開能直接到登入頁。
+- [ ] 上傳一份教材並在另一個帳號預覽／下載。
+- [ ] 設定 LINE 變數後：把官方帳號加入群組取得群組 ID；成員綁定；發布一份教材確認群組收到推播。
 
 ## 已知的 Sites 限制與對應
 
@@ -34,7 +36,8 @@ cd /opt/church && zip -r leaders-hub-source.zip leaders-hub -x 'leaders-hub/node
 | 無原始 TCP，資料庫只能用 D1 | `db/schema.ts` 為 D1（SQLite）設計；JSON 欄位以 text 儲存 |
 | 無背景服務 | 提醒推播採惰性排程或管理員手動觸發（見 03 文件） |
 | 128 MB 記憶體 | Excel 匯出在瀏覽器端產生（ExcelJS），不在 Workers |
-| 私人附件 | 存 R2，下載時由 API 檢查權限後回傳限時連結 |
+| 私人附件 | 存 R2；`/api/files/{key}` 逐次檢查權限，或 15 分鐘 HMAC 限時連結（見 06 文件） |
+| 單一請求 100 MB | 教材上限 100 MB、作業附件 50 MB |
 | 外部 OAuth 未驗證 | 第一版使用 Sign in with ChatGPT（見 02 文件） |
 
 ## 之後更新 schema 時
